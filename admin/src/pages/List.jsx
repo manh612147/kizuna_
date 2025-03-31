@@ -8,10 +8,17 @@ const List = ({ token }) => {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
 
+  // ================= TÌM KIẾM & LỌC =================
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
   // Lấy danh sách sản phẩm từ API
   const fetchList = async () => {
     try {
-      const response = await axios.get(backendUrl + "/api/product/list");
+      const response = await axios.get(
+        backendUrl + "/api/product/list"
+      );
+
       if (response.data.success) {
         setList(response.data.products);
       } else {
@@ -22,6 +29,21 @@ const List = ({ token }) => {
       toast.error(error.message);
     }
   };
+
+  // ================= LỌC SẢN PHẨM =================
+  const filteredList = list.filter((item) => {
+    const keyword = searchTerm.toLowerCase().trim();
+
+    const matchSearch =
+      item.name?.toLowerCase().includes(keyword) ||
+      item.productCode?.toLowerCase().includes(keyword);
+
+    const matchCategory =
+      selectedCategory === "all" ||
+      item.category?.toLowerCase() === selectedCategory.toLowerCase();
+
+    return matchSearch && matchCategory;
+  });
 
   // Xóa sản phẩm
   const removeProduct = async (id) => {
@@ -34,7 +56,7 @@ const List = ({ token }) => {
 
       if (response.data.success) {
         toast.success(response.data.message);
-        await fetchList(); // Cập nhật danh sách sau khi xoá
+        await fetchList();
       } else {
         toast.error(response.data.message);
       }
@@ -55,9 +77,15 @@ const List = ({ token }) => {
     const { name, value } = e.target;
 
     if (name === "size") {
-      setEditData({ ...editData, size: value.split(",") }); // Chuyển chuỗi thành mảng
+      setEditData({
+        ...editData,
+        size: value.split(","),
+      });
     } else {
-      setEditData({ ...editData, [name]: value });
+      setEditData({
+        ...editData,
+        [name]: value,
+      });
     }
   };
 
@@ -65,15 +93,19 @@ const List = ({ token }) => {
   const saveEdit = async () => {
     try {
       const response = await axios.put(
-        `${backendUrl}/api/product/update/${editingId}`, // Gửi id trong URL
+        `${backendUrl}/api/product/update/${editingId}`,
         editData,
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
 
       if (response.data.success) {
         toast.success("Cập nhật sản phẩm thành công");
         setEditingId(null);
-        fetchList(); // Cập nhật danh sách sản phẩm
+        fetchList();
       } else {
         toast.error(response.data.message);
       }
@@ -89,32 +121,114 @@ const List = ({ token }) => {
 
   return (
     <div>
-      <p className="mb-2">Danh sách tất cả sản phẩm</p>
+
+      <p className="mb-3">
+        Danh sách tất cả sản phẩm
+      </p>
+
+      {/* ================= TÌM KIẾM + LỌC ================= */}
+      <div className="flex flex-col md:flex-row gap-3 mb-4">
+
+        {/* Ô tìm kiếm */}
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="🔍 Tìm theo tên hoặc mã sản phẩm..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:border-blue-500"
+          />
+        </div>
+
+        {/* Lọc danh mục */}
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="md:w-52 border border-gray-300 rounded-lg px-4 py-2.5 bg-white outline-none focus:border-blue-500"
+        >
+          <option value="all">
+            Tất cả danh mục
+          </option>
+
+          <option value="gaubong">
+            Gấu bông
+          </option>
+
+          <option value="mockhoa">
+            Móc khóa
+          </option>
+
+          <option value="vongtay">
+            Vòng tay
+          </option>
+
+          <option value="hoa">
+            Hoa
+          </option>
+        </select>
+
+        {/* Xóa bộ lọc */}
+        {(searchTerm || selectedCategory !== "all") && (
+          <button
+            onClick={() => {
+              setSearchTerm("");
+              setSelectedCategory("all");
+            }}
+            className="px-4 py-2.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700"
+          >
+            Xóa lọc
+          </button>
+        )}
+
+      </div>
+
+      {/* Số lượng kết quả */}
+      <p className="text-sm text-gray-500 mb-2">
+        Hiển thị {filteredList.length} / {list.length} sản phẩm
+      </p>
+
       <div className="flex flex-col gap-2">
+
         {/* Tiêu đề bảng danh sách */}
-        <div className="hidden md:grid grid-cols-[1fr_3fr_1fr_1fr_1fr_1fr_1fr] items-center py-1 px-2 border bg-gray-100 text-sm">
+        <div className="hidden md:grid grid-cols-[1fr_3fr_1fr_1fr_1fr_1fr_1fr_1fr] items-center py-1 px-2 border bg-gray-100 text-sm">
           <b>Hình ảnh</b>
           <b>Tên</b>
+          <b>Mã sản phẩm</b>
           <b>Danh mục</b>
-          <b>Giá</b>
+          <b>Giá bán</b>
+          <b>Giá nhập</b>
           <b>Số lượng</b>
           <b className="text-center">Hành động</b>
         </div>
 
         {/* Danh sách sản phẩm */}
-        {list.map((item, index) => (
+        {filteredList.map((item, index) => (
           <div
-            className="grid grid-cols-[1fr_3fr_1fr] md:grid-cols-[1fr_3fr_1fr_1fr_1fr_1fr_1fr] items-center gap-2 py-1 px-2 border text-sm"
-            key={index}
+            key={item._id}
+            className="grid grid-cols-[1fr_3fr_1fr] md:grid-cols-[1fr_3fr_1fr_1fr_1fr_1fr_1fr_1fr] items-center gap-2 py-1 px-2 border text-sm"
           >
-            <img className="w-12" src={item.image[0]} alt="" />
+            <img
+              className="w-12"
+              src={item.image[0]}
+              alt={item.name}
+            />
+
             <p>{item.name}</p>
+
+            <p>{item.productCode}</p>
+
             <p>{item.category}</p>
+
             <p>
-              {currency}
-              {item.price}
+              {Number(item.price).toLocaleString("vi-VN")} {currency}
             </p>
-            <p>{item.discount}</p>
+
+            <p className="text-blue-600 font-medium">
+              {Number(item.importPrice || 0).toLocaleString("vi-VN")} {currency}
+            </p>
+
+            <p>{item.stock}</p>
+
             <div className="flex gap-2">
               <button
                 onClick={() => startEditing(item)}
@@ -122,6 +236,7 @@ const List = ({ token }) => {
               >
                 Edit
               </button>
+
               <p
                 onClick={() => removeProduct(item._id)}
                 className="text-right md:text-center cursor-pointer text-lg text-red-500"
@@ -166,7 +281,14 @@ const List = ({ token }) => {
                 onChange={handleChange}
                 className="border p-2 rounded"
               />
-
+              <label>Giá nhập:</label>
+              <input
+              type="number"
+              name="importPrice"
+              value={editData.importPrice}
+              onChange={handleChange}
+              className="border p-2 rounded"
+              />
               <label>Số lượng:</label>
               <input
                 type="number"

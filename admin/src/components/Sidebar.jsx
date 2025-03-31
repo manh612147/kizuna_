@@ -36,7 +36,7 @@ const Sidebar = ({ token }) => {
 
       {/* Danh sách menu */}
       <div className="flex flex-col gap-2 pt-4 px-4">
-        <SidebarItem to="/add" icon={<FaBox />} text="Thêm sản phẩm" />
+        <SidebarItem to="/add" icon={<FaBox />} text="Thêm sản phẩm mới" />
         <SidebarItem
           to="/list"
           icon={<FaRegListAlt />}
@@ -53,11 +53,7 @@ const Sidebar = ({ token }) => {
           icon={<FaUsers />}
           text="Danh sách người dùng"
         />
-        <SidebarItem
-          to="/newsletter"
-          icon={<FaUsers />}
-          text="Tài khoản đăng ký nhận ưu đãi"
-        />
+        
         <SidebarItem
           to="/admincomment"
           icon={<FaComment />}

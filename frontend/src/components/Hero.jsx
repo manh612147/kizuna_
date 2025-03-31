@@ -1,5 +1,6 @@
 import React from "react";
 import { assets } from '../assets/frontend_assets/assets';
+import hero_img from "../assets/frontend_assets/hero_img.jpg";
 
 const Hero = () => {
   return (
@@ -19,7 +20,11 @@ const Hero = () => {
           </div>
         </div>
       </div>
-      <img className="w-full sm:w-1/2" src="https://xuconcept.com/wp-content/uploads/2018/08/chup-anh-quan-ao-thoi-trang.jpg" alt=""/>
+      <img
+  className="w-full sm:w-1/2 h-[250px] sm:h-[400px] object-cover"
+  src={hero_img}
+  alt="Hero"
+/>
     </div>
   );
 };

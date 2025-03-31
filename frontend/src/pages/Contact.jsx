@@ -2,6 +2,7 @@ import React from 'react'
 import Title from '../components/Title'
 import { assets } from '../assets/frontend_assets/assets'
 import NewsletterBox from '../components/NewsletterBox'
+import contact from "../assets/frontend_assets/contact.jpg";
 
 const Contact = () => {
   return (
@@ -15,19 +16,19 @@ const Contact = () => {
       <div className="my-10 flex flex-col justify-center md:flex-row gap-10 mb-28">
         {/* Hình ảnh liên hệ */}
         <img
-          className="w-full md:max-w-[480px]"
-          src={assets.contact_img}
-          alt="Liên hệ chúng tôi"
-        />
+  className="w-full md:w-[450px] h-[500px] object-cover rounded-lg"
+  src={contact}
+  alt="Liên hệ chúng tôi"
+/>
 
         {/* Thông tin liên hệ */}
         <div className="flex flex-col justify-center items-start gap-6">
           <p className="font-semibold text-xl text-gray-600">Cửa Hàng Của Chúng Tôi</p>
           <p className="text-gray-500">
-            54709 Wilmax Station <br /> Suite 350, Washington, USA
+            347 cổ nhuế 2 <br /> Đông Ngạc , Hà Nội
           </p>
           <p className="text-gray-500">
-            SĐT: (0)96 317 8476 <br /> Email: vuthanhtuyen911@gmail.com
+            SĐT: 0368510005 <br /> Email: manh612147@gmail.com
           </p>
           <p className="font-semibold text-gray-500">Cơ Hội Nghề Nghiệp</p>
           <p className="text-gray-500">

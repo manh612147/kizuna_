@@ -4,14 +4,18 @@ import Title from "./Title";
 import ProductItem from "./ProductItem";
 
 const LatestCollection = () => {
-  const { products } = useContext(ShopContext);
-  console.log(products);
+  const { products, favoriteIds } = useContext(ShopContext);
+  // console.log(products);
 
   const [latestProduct, setLatestProducts] = useState([]);
 
-  useEffect(() => {
-    setLatestProducts(products.slice(0, 10));
-  }, [products]);
+ useEffect(() => {
+  const latest = [...products]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5);
+
+  setLatestProducts(latest);
+}, [products]);
   return (
     <div className="my-10">
       <div className="text-center py-8 text-3xl">
@@ -30,7 +34,10 @@ const LatestCollection = () => {
             image={item.image}
             name={item.name}
             price={item.price}
-          />
+            stock={item.stock}
+            discount={item.discount}
+            isFavorite={favoriteIds.includes(item._id)}
+        />
         ))}
       </div>
     </div>

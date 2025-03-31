@@ -52,13 +52,18 @@ const AdminComments = () => {
                 <tr key={comment._id} className="border-b hover:bg-gray-100 transition duration-200">
                   <td className="p-3">{comment.user}</td>
                   <td className="p-3">{comment.text}</td>
-                  <td className="p-3">{comment.productId}</td>
+                  <td>
+                      <div>{comment.productId?.productCode}</div>
+                      <div className="text-xs text-gray-500">
+                          {comment.productId?.name}
+                      </div>
+                  </td>
                   <td className="p-3 text-center">
                     <button
                       onClick={() => handleDelete(comment._id)}
                       className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition duration-200"
                     >
-                      🗑️ Xóa
+                       Xóa
                     </button>
                   </td>
                 </tr>

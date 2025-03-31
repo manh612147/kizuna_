@@ -1,13 +1,17 @@
 import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema({
+  productCode: {
+  type: String,
+  required: true,
+  unique: true,
+  trim: true,
+},
   name: { type: String, required: true },
   description: { type: String, required: true },
   category: { type: String, required: true },
-  subCategory: { type: String, required: true },
   price: { type: Number, required: true },
   importPrice:{ type: Number, required: true } ,
-  sizes: { type: [String], default: [] },
   bestseller: { type: Boolean, default: false },
   stock: { type: Number, required: true, min: 0 }, // Số lượng trong kho (>= 0)
   discount: { type: Number, default: 0, min: 0, max: 100 }, // Giảm giá %
@@ -25,3 +29,5 @@ productSchema.pre("save", function (next) {
 const productModel = mongoose.models.product || mongoose.model("product", productSchema);
 
 export default productModel;
+
+

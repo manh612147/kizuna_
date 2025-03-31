@@ -1,5 +1,6 @@
 import userModel from "../models/userModel.js";
 import referralModel from "../models/referralModel.js";
+import mongoose from "mongoose";
 
 // Lấy danh sách tất cả người dùng
 const getAllUsers = async (req, res) => {
@@ -51,10 +52,15 @@ const deleteUser = async (req, res) => {
 
     res.json({ success: true, message: "Xóa người dùng thành công." });
   } catch (error) {
-    console.error("Lỗi khi xóa người dùng:", error.message);
-    res.status(500).json({ success: false, message: "Lỗi server." });
+    console.error("Lỗi khi xóa người dùng:", error);
+    // Log thêm thông tin chi tiết về lỗi nếu cần
+    if (error.name === 'MongoError') {
+      console.error("MongoDB Error:", error.message);
+    }
+    res.status(500).json({ success: false, message: "Lỗi server.", error: error.message });
   }
 };
+
 
 
 // Cập nhật thông tin người dùng

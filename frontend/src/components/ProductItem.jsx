@@ -1,89 +1,200 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext } from "react";
 import { ShopContext } from '../context/ShopContext';
 import { Link } from 'react-router-dom';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
-const ProductItem = ({ id, image, name, price, stock, discount, isFavorite, showStock = false}) => {
-  const { currency } = useContext(ShopContext);
-  const [favorite, setFavorite] = useState(isFavorite);
+const ProductItem = ({
+    id,
+    image,
+    name,
+    price,
+    stock,
+    discount,
+    showStock = false
+}) => {
+  const {
+  currency,
+  favoriteIds,
+  setFavoriteIds
+} = useContext(ShopContext);
+
+const favorite = favoriteIds.includes(id);
+ 
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
   const userId = localStorage.getItem("userId");
 
   const toggleFavorite = async (e) => {
-    e.preventDefault(); // Ngăn chặn việc chuyển trang khi nhấn vào biểu tượng
+  e.preventDefault();
 
-    if (!userId) {
-      console.error('Thiếu userId, không thể thực hiện thao tác yêu thích.');
-      return;
+  if (!userId) {
+    toast.error("Vui lòng đăng nhập!");
+    return;
+  }
+
+  try {
+    if (favorite) {
+      // Xóa khỏi yêu thích
+      await axios.delete(
+        `${backendUrl}/api/favorites/${userId}/${id}`
+      );
+
+      setFavoriteIds(prev =>
+        prev.filter(item => item !== id)
+      );
+
+      toast.success("Đã xóa khỏi danh sách yêu thích");
+    } else {
+      // Thêm yêu thích
+      await axios.post(
+        `${backendUrl}/api/favorites`,
+        {
+          productId: id,
+          userId,
+        }
+      );
+
+      setFavoriteIds(prev => [...prev, id]);
+
+      toast.success("Đã thêm vào danh sách yêu thích");
     }
-    console.log('usserID', userId);
-    try {
-      if (favorite) {
-        await axios.delete(`${backendUrl}/api/favorites/${userId}/${id}`);
-      } else {
-        await axios.post(`${backendUrl}/api/favorites`, { productId: id, userId });
-      }
-      toast.success("Thêm vào danh sách yêu thích thành công");
-      setFavorite(!favorite);
-    } catch (error) {
-      console.error('Lỗi khi cập nhật trạng thái yêu thích:', error);
-    }
-  };
+  } catch (error) {
+    console.error(error);
+    toast.error("Có lỗi xảy ra!");
+  }
+};
 
-  return (
-    <Link className='text-gray-700 cursor-pointer relative' to={`/product/${id}`}>
-      <div className='overflow-hidden relative'>
-        <img className='hover:scale-110 transition ease-in-out' src={image[0]} alt={name} />
+return (
+  <Link
+    to={`/product/${id}`}
+    className="
+      group block relative overflow-hidden
+      bg-white border border-gray-200
+      border-5 border-green-300
+      rounded-2xl shadow-sm
+      hover:shadow-xl hover:-translate-y-1
+      transition-all duration-300
+    "
+  >
+    {/* ẢNH SẢN PHẨM */}
+    <div className="relative h-[230px] overflow-hidden bg-gray-100">
+      <img
+        className="
+          w-full h-full object-cover
+          group-hover:scale-110
+          transition-transform duration-500
+        "
+        src={image?.[0]}
+        alt={name}
+      />
 
-        {/* Hiển thị trạng thái "Hết hàng" */}
-        {stock === 0 && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-            Hết hàng
-          </div>
-        )}
+      {/* Lớp tối nhẹ khi hover */}
+      <div className="
+        absolute inset-0 bg-black/0
+        group-hover:bg-black/5
+        transition duration-300
+      " />
 
-        {/* Hiển thị giảm giá */}
-        {discount > 0 && (
-          <div className="absolute bottom-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
-            -{discount}%
-          </div>
-        )}
-
-        {/* Nút yêu thích */}
-        <div
-          onClick={toggleFavorite}
-          className="absolute top-2 right-2 z-10 p-2 bg-white rounded-full shadow-md hover:bg-red-100 hover:scale-110 transition"
-        >
-          {favorite ? (
-            <FaHeart className="text-red-500 text-lg" />
-          ) : (
-            <FaRegHeart className="text-gray-400 text-lg" />
-          )}
+      {/* HẾT HÀNG */}
+      {stock === 0 && (
+        <div className="
+          absolute top-3 left-3
+          bg-red-600 text-white
+          text-xs font-semibold
+          px-3 py-1.5 rounded-full
+          shadow-md
+        ">
+          HẾT HÀNG
         </div>
-      </div>
+      )}
 
-      <p className='pt-3 pb-1 text-sm'>{name}</p>
+      {/* GIẢM GIÁ */}
+      {discount > 0 && (
+        <div className="
+          absolute bottom-3 left-3
+          bg-yellow-400 text-gray-900
+          text-xs font-bold
+          px-3 py-1.5 rounded-full
+          shadow-md
+        ">
+          -{discount}%
+        </div>
+      )}
 
-      {/* Hiển thị giá sau khi giảm */}
-      <p className='text-sm font-medium'>
+      {/* YÊU THÍCH */}
+      <button
+        type="button"
+        onClick={toggleFavorite}
+        className="
+          absolute top-3 right-3 z-10
+          w-10 h-10
+          flex items-center justify-center
+          bg-white/90 backdrop-blur-sm
+          rounded-full shadow-md
+          hover:scale-110 hover:bg-red-50
+          transition-all duration-200
+        "
+      >
+        {favorite ? (
+          <FaHeart className="text-red-500 text-lg" />
+        ) : (
+          <FaRegHeart className="text-gray-500 text-lg" />
+        )}
+      </button>
+    </div>
+
+    {/* THÔNG TIN SẢN PHẨM */}
+    <div className="p-4">
+      <h3 className="
+        text-gray-800 font-semibold
+        text-base mb-2
+        line-clamp-2
+        group-hover:text-black
+        transition
+      ">
+        {name}
+      </h3>
+
+      {/* GIÁ */}
+      <div className="flex flex-wrap items-center gap-2">
         {discount > 0 ? (
           <>
-            <span className="text-red-500">
-              {currency}{(price * (1 - discount / 100)).toFixed(0)}
+            <span className="text-red-600 text-base font-bold">
+              {Number(
+                price * (1 - discount / 100)
+              ).toLocaleString("vi-VN")}{" "}
+              {currency}
             </span>
-            <span className="text-gray-500 line-through ml-2">{currency}{price}</span>
+
+            <span className="text-gray-400 text-sm line-through">
+              {Number(price).toLocaleString("vi-VN")} {currency}
+            </span>
           </>
         ) : (
-          <span>{currency}{price}</span>
+          <span className="text-gray-900 text-base font-bold">
+            {Number(price).toLocaleString("vi-VN")} {currency}
+          </span>
         )}
-      </p>
+      </div>
 
-      {/* Hiển thị số lượng sản phẩm */}
-      {showStock && <p className='text-gray-500 text-sm'>Số lượng: {stock}</p>}
-    </Link>
-  );
+      {/* SỐ LƯỢNG */}
+      {showStock && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <p
+            className={`text-sm font-medium ${
+              stock > 0 ? "text-green-600" : "text-red-500"
+            }`}
+          >
+            {stock > 0
+              ? `Còn ${stock} sản phẩm`
+              : "Sản phẩm đã hết hàng"}
+          </p>
+        </div>
+      )}
+    </div>
+  </Link>
+);
 };
 
 export default ProductItem;

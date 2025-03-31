@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 const Comments = ({ productId }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
+  const [rating, setRating] = useState(5);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editedText, setEditedText] = useState("");
 
@@ -43,7 +44,7 @@ const Comments = ({ productId }) => {
         userId: userId,
         user: userName,
         text: newComment,
-        rating: 5,
+        rating: rating,
       });
   
       toast.success("Thêm bình luận thành công!");
@@ -119,6 +120,21 @@ const Comments = ({ productId }) => {
           placeholder="Nhập bình luận..."
           className="border p-2 w-full rounded"
         />
+        <div className="flex gap-2 mt-3 mb-3">
+          {[1,2,3,4,5].map((star)=>(
+              <span
+                  key={star}
+                  onClick={()=>setRating(star)}
+                  className={`text-3xl cursor-pointer ${
+                      star <= rating
+                          ? "text-yellow-500"
+                          : "text-gray-300"
+                  }`}
+              >
+                  ★
+              </span>
+          ))}
+      </div>
         <button onClick={handleAddComment} className="bg-blue-500 text-white p-2 rounded mt-2 w-full">
           Gửi
         </button>
@@ -140,7 +156,26 @@ const Comments = ({ productId }) => {
             <p>{comment.text}</p>
           )}
 
-          <p className="text-gray-600 text-sm">Đánh giá: {comment.rating} ⭐ | Lượt thích: {comment.likes}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <span
+                  key={star}
+                  className={`text-xl ${
+                    star <= comment.rating
+                      ? "text-yellow-500"
+                      : "text-gray-300"
+                  }`}
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+
+            <span className="text-gray-600 text-sm">
+              | Lượt thích: {comment.likes}
+            </span>
+          </div>
 
           <div className="flex gap-2 mt-2">
             <button onClick={() => handleLike(comment._id)} className="bg-green-500 text-white p-2 rounded">

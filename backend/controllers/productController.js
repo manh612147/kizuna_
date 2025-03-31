@@ -5,7 +5,7 @@ import productModel from "../models/productModel.js";
 const addProduct = async (req, res) => {
     try {
         // Lấy dữ liệu từ request body
-        const { name, description, price, importPrice, category, subCategory, sizes, bestseller, stock, discount, status } = req.body;
+        const { name,productCode, description, price, importPrice, category, bestseller, stock, discount, status } = req.body;
 
         // Lấy các file ảnh từ request
         const image1 = req.files.image1 && req.files.image1[0];
@@ -27,21 +27,20 @@ const addProduct = async (req, res) => {
         // Tạo dữ liệu sản phẩm
         const productData = {
             name,
+            productCode,
             description,
             category,
             price: Number(price),
-            importPrice: Number(importPrice), // Chuyển đổi giá sang kiểu số
-            subCategory,
-            bestseller: bestseller === "true", // Chuyển đổi bestseller sang kiểu boolean
-            sizes: JSON.parse(sizes), // Chuyển đổi chuỗi JSON thành mảng sizes
-            image: imagesUrl, // Lưu danh sách URL ảnh
-            stock: Number(stock), // Số lượng trong kho
-            discount: Number(discount), // Giảm giá
-            status: status || "còn hàng", // Trạng thái sản phẩm (mặc định là còn hàng)
-            date: Date.now(), // Lưu ngày tạo sản phẩm
+            importPrice: Number(importPrice),
+            bestseller: bestseller === "true",
+            image: imagesUrl, 
+            stock: Number(stock), 
+            discount: Number(discount), 
+            status: status || "Còn hàng", 
+            date: Date.now(), 
         };
 
-        console.log("sizes:", sizes);
+
         console.log(productData);
 
         // Tạo và lưu sản phẩm vào database
@@ -111,7 +110,7 @@ const updateProduct = async (req, res) => {
         console.log("Received body:", req.body);
 
         const { id } = req.params; // Lấy ID từ URL params
-        const { name, description, price, category, subCategory, bestseller, stock, discount, status } = req.body;
+        const { name, description, price, importPrice, category, bestseller, stock, discount, status } = req.body;
 
         console.log("Updating product with ID:", id);
 
@@ -121,7 +120,7 @@ const updateProduct = async (req, res) => {
             return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại" });
         }
 
-        // Cập nhật sản phẩm (BỎ TRƯỜNG `sizes`)
+        // Cập nhật sản phẩm (BỎ TRƯỜNG )
         const updatedProduct = await productModel.findByIdAndUpdate(
             id,
             {
@@ -129,7 +128,7 @@ const updateProduct = async (req, res) => {
                 description,
                 category,
                 price: Number(price),
-                subCategory,
+                importPrice: Number(importPrice),
                 bestseller: bestseller === "true",
                 stock: Number(stock),
                 discount: Number(discount),
@@ -145,19 +144,5 @@ const updateProduct = async (req, res) => {
     }
 };
 
-// Tính tổng doanh thu 
-const getRevenue = async (req, res) => {
-    try {
-        const products = await productModel.find();
-        
-        let totalRevenue = products.reduce((acc, product) => {
-            let profitPerProduct = (product.price - product.importPrice) * product.sold;
-            return acc + profitPerProduct;
-        }, 0);
 
-        res.json({ success: true, revenue: totalRevenue });
-    } catch (error) {
-        res.json({ success: false, message: error.message });
-    }
-};
 export { listProducts, addProduct, removeProduct, singleProduct, countProducts, updateProduct };

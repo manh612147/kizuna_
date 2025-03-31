@@ -1,144 +1,292 @@
 import orderModel from "../models/orderModel.js";
-import userModel from "../models/userModel.js";
 import cartModel from "../models/cartModel.js";
 import  productModel from '../models/productModel.js'
-import Stripe from "stripe";
+import { v2 as cloudinary } from "cloudinary";
+
 import mongoose from "mongoose";
+import {sendOrderEmail,sendStatusEmail,sendCancelEmail} from "../config/mailService.js";
 
-// Biến toàn cục
-const currency = "USD"; // Đơn vị tiền tệ
-const deliveryCharge = 10; // Phí vận chuyển
 
-// Khởi tạo cổng thanh toán Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const generateOrderCode = () => {
+    const now = new Date();
+
+    const year = now.getFullYear().toString().slice(-2);
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    const random = Math.floor(1000 + Math.random() * 9000);
+
+    return `KZ${year}${month}${day}${random}`;
+};
+
+const reduceStock = async (items) => {
+    // Kiểm tra tồn kho trước
+    for (const item of items) {
+        const productId = item._id || item.productId || item.itemId;
+        const quantity = Number(item.quantity);
+
+        const product = await productModel.findById(productId);
+
+        if (!product) {
+            throw new Error(`Không tìm thấy sản phẩm ${item.name || ""}`);
+        }
+
+        if (product.stock < quantity) {
+            throw new Error(
+                `Sản phẩm ${product.name} chỉ còn ${product.stock} sản phẩm`
+            );
+        }
+    }
+
+    // Sau khi tất cả đều đủ hàng thì mới trừ
+    for (const item of items) {
+        const productId = item._id || item.productId || item.itemId;
+        const quantity = Number(item.quantity);
+
+        const product = await productModel.findByIdAndUpdate(
+            productId,
+            {
+                $inc: { stock: -quantity }
+            },
+            { new: true }
+        );
+
+        // Nếu hết hàng thì cập nhật trạng thái
+        if (product.stock === 0) {
+            product.status = "Hết hàng";
+            await product.save();
+        }
+    }
+};
 
 // Đặt hàng bằng phương thức Thanh toán khi nhận hàng (COD)
 const placeOrder = async (req, res) => {
     try {
         const { userId, items, amount, address } = req.body;
 
-        // Kiểm tra userId hợp lệ
         if (!mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
+            return res.status(400).json({
+                success: false,
+                message: "ID không hợp lệ!"
+            });
         }
 
-        // 📌 Tạo đơn hàng mới
+        if (!items || items.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Không có sản phẩm trong đơn hàng!"
+            });
+        }
+
+       
+       // Kiểm tra tồn kho và tạo dữ liệu đơn hàng
+const orderItems = [];
+
+for (const item of items) {
+
+    const productId = item._id || item.productId || item.itemId;
+
+    const product = await productModel.findById(productId);
+
+    if (!product) {
+        return res.status(404).json({
+            success: false,
+            message: `Không tìm thấy sản phẩm ${item.name || ""}`
+        });
+    }
+
+    if (product.stock < Number(item.quantity)) {
+        return res.status(400).json({
+            success: false,
+            message: `${product.name} chỉ còn ${product.stock} sản phẩm!`
+        });
+    }
+
+    orderItems.push({
+        productId: product._id,
+        productCode: product.productCode, // Mã sản phẩm
+        name: product.name,
+        image: product.image,
+        price: product.price,
+        quantity: item.quantity
+    });
+}
+        // Tạo đơn hàng
         const orderData = {
             userId,
-            items,
+            items: orderItems,
             address,
             amount,
             paymentMethod: "COD",
             payment: false,
             status: "Order Placed",
+
+            orderCode: generateOrderCode(),
+
             date: Date.now(),
         };
 
         const newOrder = new orderModel(orderData);
         await newOrder.save();
 
-        // ✅ Xóa giỏ hàng của user sau khi đặt hàng thành công
-        await cartModel.findOneAndDelete({ userId });
+        // Đặt hàng COD thành công -> trừ tồn kho
+        await reduceStock(items);
 
-        res.json({ success: true, message: "Đơn hàng đã được đặt thành công!" });
+        // Xóa giỏ hàng
+        await cartModel.findOneAndDelete({ userId });
+        // Gửi email xác nhận
+        await sendOrderEmail(
+            address.email,
+            `${address.firstName} ${address.lastName}`,
+            items,
+            amount,
+            orderData.orderCode
+        );
+        res.json({
+            success: true,
+            message: "Đơn hàng đã được đặt thành công!"
+        });
+
     } catch (error) {
-        console.error("🔥 Lỗi khi đặt hàng COD:", error);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống!" });
+        console.error("Lỗi khi đặt hàng COD:", error);
+
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
-// Đặt hàng bằng phương thức thanh toán Stripe
-const placeOrderStripe = async (req, res) => {
+// Đặt hàng bằng chuyển khoản ngân hàng
+const placeOrderBank = async (req, res) => {
     try {
         const { userId, items, amount, address } = req.body;
-        const { origin } = req.headers; // Lấy URL nguồn từ request header
 
         if (!userId || !items || items.length === 0 || !amount || !address) {
-            return res.status(400).json({ success: false, message: "Thiếu dữ liệu đặt hàng!" });
+            return res.status(400).json({
+                success: false,
+                message: "Thiếu dữ liệu đặt hàng!"
+            });
         }
 
-        // Tạo dữ liệu đơn hàng
-        const orderData = {
-            userId,
-            items,
-            address,
-            amount,
-            paymentMethod: "Stripe",
-            payment: false,
-            date: Date.now()
-        };
+        // Kiểm tra tồn kho và tạo dữ liệu đơn hàng
+        const orderItems = [];
 
-        // Lưu đơn hàng vào database
-        const newOrder = new orderModel(orderData);
+        for (const item of items) {
+            const productId = item._id || item.productId || item.itemId;
+            const product = await productModel.findById(productId);
+
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Không tìm thấy sản phẩm!"
+                });
+            }
+
+            if (product.stock < Number(item.quantity)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `${product.name} chỉ còn ${product.stock} sản phẩm!`
+                });
+            }
+
+            orderItems.push({
+                productId: product._id,
+                productCode: product.productCode,
+                name: product.name,
+                image: product.image,
+                price: product.price,
+                quantity: item.quantity
+            });
+        }
+
+        // Tạo đơn hàng (Bỏ paymentProof đi vì không còn upload ảnh)
+        const newOrder = new orderModel({
+            userId,
+            items: orderItems,
+            amount: Number(amount),
+            address,
+            orderCode: generateOrderCode(),
+            paymentMethod: "Bank Transfer",
+            payment: false,
+            paymentStatus: "Chờ xác nhận", // Trạng thái nhắc Admin vào check tài khoản
+            status: "Order Placed",
+            date: Date.now()
+        });
+
         await newOrder.save();
 
+        // Đặt hàng thành công mới trừ kho
+        await reduceStock(items);
+
+        // Xóa giỏ hàng
+        await cartModel.findOneAndDelete({ userId });
         
-        // Tạo danh sách sản phẩm để thanh toán
-        const line_items = []
-        
-        items.forEach((item) => {
-            line_items.push({
-                price_data: {
-                    currency: currency,
-                    product_data: {
-                        name: item.name,
-                    },
-                    unit_amount: (item.price) * 100, // Đổi sang cent
-                },
-                quantity: (item.quantity),
-            })
+        // Gửi mail xác nhận
+        await sendOrderEmail(
+            address.email,
+            `${address.firstName} ${address.lastName}`,
+            items,
+            amount,
+            newOrder.orderCode
+        );
+
+        res.json({
+            success: true,
+            message: "Đặt hàng thành công! Đang chờ Admin xác nhận thanh toán."
         });
 
-        // Thêm phí vận chuyển vào danh sách thanh toán
-        line_items.push({
-            price_data: {
-                currency: currency,
-                product_data: { name: "Phí vận chuyển" },
-                unit_amount: Number(deliveryCharge * 100),
-            },
-            quantity: 1,
-        });
-
-        // Tạo phiên thanh toán với Stripe
-        const session = await stripe.checkout.sessions.create({
-            success_url: `${origin}/verify?success=true&orderId=${newOrder._id}`,
-            cancel_url: `${origin}/verify?success=false&orderId=${newOrder._id}`,
-            line_items,
-            mode: "payment",
-        });
-
-        res.json({ success: true, session_url: session.url });
     } catch (error) {
-        console.error("Lỗi khi tạo phiên Stripe:", error);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống" });
+        console.error("Lỗi đặt hàng chuyển khoản:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
-// Xác minh thanh toán Stripe
-const verifyStripe = async (req, res) => {
+// Admin xác nhận khách đã chuyển khoản
+const confirmBankPayment = async (req, res) => {
     try {
-        const { orderId, success, userId } = req.body;
+        const { orderId } = req.body;
 
-        if (success === "true") {
-            await orderModel.findByIdAndUpdate(orderId, { payment: true });
-            await userModel.findByIdAndUpdate(userId, { cartData: {} });
+        const order = await orderModel.findByIdAndUpdate(
+            orderId,
+            {
+                payment: true,
+                paymentStatus: "Đã thanh toán"
+            },
+            { new: true }
+        );
 
-            res.json({ success: true, message: "Thanh toán thành công!" });
-        } else {
-            await orderModel.findByIdAndDelete(orderId);
-            res.json({ success: false, message: "Thanh toán thất bại, đơn hàng đã bị xóa!" });
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy đơn hàng!"
+            });
         }
+
+        res.json({
+            success: true,
+            message: "Đã xác nhận thanh toán!"
+        });
+
     } catch (error) {
-        console.error("Lỗi khi xác minh thanh toán:", error);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống" });
+        console.error("Lỗi xác nhận thanh toán:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Lỗi hệ thống!"
+        });
     }
 };
-
 // Lấy tất cả đơn hàng cho bảng quản trị
 const allOrders = async (req, res) => {
     try {
         
-        const orders = await orderModel.find({});
+        const orders = await orderModel
+            .find({})
+            .sort({ date: -1 });
         res.json({ success: true, orders });
     } catch (error) {
         console.error("Lỗi khi lấy tất cả đơn hàng:", error);
@@ -163,21 +311,64 @@ const userOrders = async (req, res) => {
 // Cập nhật trạng thái đơn hàng từ bảng quản trị
 const updateStatus = async (req, res) => {
     try {
-        const { orderId, status } = req.body;
+
+        const { orderId, status, cancelReason } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(orderId)) {
-            return res.status(400).json({ success: false, message: "ID đơn hàng không hợp lệ" });
+            return res.status(400).json({
+                success: false,
+                message: "ID đơn hàng không hợp lệ"
+            });
         }
 
-        await orderModel.findByIdAndUpdate(orderId, { status });
+        // Lấy đơn hàng
+        const order = await orderModel.findById(orderId);
 
-        res.json({ success: true, message: "Trạng thái đơn hàng đã được cập nhật" });
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy đơn hàng"
+            });
+        }
+
+        // Cập nhật trạng thái
+       
+        order.status = status;
+
+        // Nếu hủy đơn thì lưu lý do và thời gian hủy
+        if (status === "Cancelled") {
+            order.cancelReason = cancelReason;
+            order.cancelDate = new Date();
+        }
+
+        await order.save();
+
+        // Gửi email cho khách
+       await sendStatusEmail(
+        order.address.email,
+        `${order.address.firstName} ${order.address.lastName}`,
+        status,
+        order.items,
+        order.amount,
+        order.date,
+        order.orderCode,
+        order.cancelReason
+    );
+
+        res.json({
+            success: true,
+            message: "Trạng thái đơn hàng đã được cập nhật"
+        });
+
     } catch (error) {
-        console.error("Lỗi khi cập nhật trạng thái:", error);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống" });
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Lỗi hệ thống"
+        });
     }
 };
-
 // Tính tổng số đơn hàng
 const countOrders = async (req, res) => {
     try {
@@ -192,17 +383,34 @@ const countOrders = async (req, res) => {
 // Tính tổng doanh thu
 const getTotalRevenue = async (req, res) => {
     try {
-        const totalRevenue = await orderModel.aggregate([
-            { $group: { _id: null, total: { $sum: "$amount" } } }
+        const deliveryFee = 30000;
+
+        const result = await orderModel.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: {
+                        $sum: {
+                            $subtract: ["$amount", deliveryFee]
+                        }
+                    }
+                }
+            }
         ]);
 
-        res.json({ success: true, totalRevenue: totalRevenue[0]?.total || 0 });
+        res.json({
+            success: true,
+            totalRevenue: result[0]?.total || 0
+        });
+
     } catch (error) {
         console.error("Lỗi khi tính doanh thu:", error);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống" });
+        res.status(500).json({
+            success: false,
+            message: "Lỗi hệ thống"
+        });
     }
 };
-
 // Tổng giá nhập hàng
 const getTotalImportCost = async (req, res) => {
     try {
@@ -281,8 +489,17 @@ const getProfit = async (req, res) => {
     try {
         // Lấy tổng doanh thu
         const revenueResult = await orderModel.aggregate([
-            { $group: { _id: null, total: { $sum: "$amount" } } }
-        ]);
+    {
+        $group: {
+            _id: null,
+            total: {
+                $sum: {
+                    $subtract: ["$amount", 30000]
+                }
+            }
+        }
+    }
+]);
         const totalRevenue = revenueResult[0]?.total || 0;
 
         // Lấy tổng giá nhập hàng
@@ -329,6 +546,7 @@ const checkout = async (req, res) => {
 
         // Cập nhật số lượng tồn kho
         for (let item of cart.items) {
+            debugger
             await productModel.findByIdAndUpdate(item.itemId, {
                 $inc: { stock: -item.quantity }
             });
@@ -362,7 +580,11 @@ const getRevenueByDay = async (req, res) => {
             {
                 $group: {
                     _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-                    totalRevenue: { $sum: "$amount" }
+                    totalRevenue: {
+    $sum: {
+        $subtract: ["$amount", 30000]
+    }
+}
                 }
             },
             { $sort: { _id: 1 } }
@@ -375,4 +597,149 @@ const getRevenueByDay = async (req, res) => {
     }
 };
 
-export { getProfit, verifyStripe, placeOrder, placeOrderStripe, allOrders, userOrders, updateStatus, countOrders, getTotalRevenue, checkout, getRevenueByDay, getTotalImportCost,getImportCostByOrder };
+
+// ================= THỐNG KÊ DOANH THU =================
+const getRevenueStats = async (req, res) => {
+    try {
+        const { fromDate, toDate } = req.query;
+
+        const match = {
+            status: "Delivered"
+        };
+
+        // Lọc từ ngày
+        if (fromDate) {
+            match.createdAt = {
+                ...match.createdAt,
+                $gte: new Date(`${fromDate}T00:00:00+07:00`)
+            };
+        }
+
+        // Lọc đến ngày
+        if (toDate) {
+            const endDate = new Date(`${toDate}T00:00:00+07:00`);
+            endDate.setDate(endDate.getDate() + 1);
+
+            match.createdAt = {
+                ...match.createdAt,
+                $lt: endDate
+            };
+        }
+
+        const result = await orderModel.aggregate([
+            { $match: match },
+
+            // 1. Tách từng sản phẩm trong đơn để tính giá vốn
+            { $unwind: "$items" },
+
+            // 2. Chuyển productId thành ObjectId
+            {
+                $addFields: {
+                    "items.productObjectId": {
+                        $convert: {
+                            input: "$items.productId",
+                            to: "objectId",
+                            onError: null,
+                            onNull: null
+                        }
+                    }
+                }
+            },
+
+            // 3. Lấy thông tin sản phẩm để lấy được importPrice (giá vốn)
+            {
+                $lookup: {
+                    from: "products",
+                    localField: "items.productObjectId",
+                    foreignField: "_id",
+                    as: "productInfo"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$productInfo",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+
+            // 4. GOM LẠI THEO ĐƠN HÀNG TRƯỚC
+            // (Bước này tính tổng giá vốn của đơn hàng và giữ lại trường amount)
+            {
+                $group: {
+                    _id: "$_id",
+                    orderAmount: { $first: "$amount" }, // Lấy tổng tiền thực tế khách trả
+                    orderImportCost: {
+                        $sum: {
+                            $multiply: [
+                                { $ifNull: ["$productInfo.importPrice", 0] },
+                                { $ifNull: ["$items.quantity", 0] }
+                            ]
+                        }
+                    }
+                }
+            },
+
+            // 5. GOM TẤT CẢ LẠI ĐỂ RA SỐ TỔNG
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: {
+                        // Doanh thu = Tổng hóa đơn - 30.000đ phí ship
+                        $sum: { $subtract: ["$orderAmount", 30000] }
+                    },
+                    totalImportCost: { $sum: "$orderImportCost" }, // Tổng giá vốn
+                    totalOrders: { $sum: 1 } // Tổng số đơn thành công
+                }
+            },
+
+            // 6. TÍNH LỢI NHUẬN
+            {
+                $project: {
+                    _id: 0,
+                    totalRevenue: 1,
+                    totalImportCost: 1,
+                    totalOrders: 1,
+                    profit: {
+                        // Lợi nhuận = Doanh thu - Giá vốn
+                        $subtract: ["$totalRevenue", "$totalImportCost"]
+                    }
+                }
+            }
+        ]);
+
+        const stats = result[0] || {
+            totalRevenue: 0,
+            totalImportCost: 0,
+            totalOrders: 0,
+            profit: 0
+        };
+
+        res.json({
+            success: true,
+            ...stats
+        });
+
+    } catch (error) {
+        console.error("Lỗi khi thống kê doanh thu:", error);
+        res.status(500).json({
+            success: false,
+            message: "Lỗi khi thống kê doanh thu"
+        });
+    }
+};
+export {
+    getProfit,
+    placeOrder,
+    placeOrderBank,
+    confirmBankPayment,
+    allOrders,
+    userOrders,
+    updateStatus,
+    countOrders,
+    getTotalRevenue,
+    checkout,
+    getRevenueByDay,
+    getTotalImportCost,
+    getImportCostByOrder,
+    getRevenueStats
+};

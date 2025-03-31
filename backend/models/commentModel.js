@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 
 const commentSchema = new mongoose.Schema({
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, 
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: "product", required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "user", required: true }, 
   user: { type: String, required: true },
   text: { type: String, required: true },
   rating: { type: Number, default: 5 },

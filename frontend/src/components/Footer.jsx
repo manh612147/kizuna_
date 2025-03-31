@@ -24,14 +24,14 @@ const Footer = () => {
         <div>
           <h3 className="text-xl font-medium mb-5">LIÊN HỆ</h3>
           <ul className="flex flex-col gap-1 text-gray-600">
-            <li>Điện thoại: +1 123 456 7890</li>
-            <li>Email: contact@foreveryou.com</li>
+            <li>Điện thoại:0368510005</li>
+            <li>Email: manh612147@gmail.com</li>
           </ul>
         </div>
       </div>
       <div>
         <hr />
-        <p className="py-5 text-sm text-center">Bản quyền 2024@forever.com - Mọi quyền được bảo lưu</p>
+        <p className="py-5 text-sm text-center">Cảm ơn quý khách</p>
       </div>
     </div>
   );

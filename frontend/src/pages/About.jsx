@@ -2,6 +2,7 @@ import React from "react";
 import Title from "../components/Title";
 import { assets } from "../assets/frontend_assets/assets";
 import NewsletterBox from '../components/NewsletterBox';
+import about from "../assets/frontend_assets/about.jpg";
 
 const About = () => {
   return (
@@ -11,10 +12,10 @@ const About = () => {
       </div>
       <div className="my-10 flex flex-col md:flex-row gap-16">
         <img
-          className="w-full md:max-w-[450px]"
-          src={assets.about_img}
-          alt="Giới thiệu về chúng tôi"
-        />
+  src={about}
+  alt="About"
+  className="w-full md:w-[450px] h-[550px] object-cover rounded-lg"
+/>
         <div className="flex flex-col justify-center gap-6 md:w-2/4 text-gray-600">
           <p>
             Chúng tôi cam kết mang đến những sản phẩm chất lượng cao và trải nghiệm mua sắm tốt nhất cho khách hàng.

@@ -6,7 +6,8 @@ import {
   updateComment,
   deleteComment,
   getAllComments,
-  getRatingSummary
+  getRatingSummary,
+  approveComment // Thêm hàm duyệt bình luận vào đây
 } from "../controllers/commentController.js";
 
 const commentrouter = express.Router();
@@ -22,5 +23,7 @@ commentrouter.get("/:productId", getComments);
 commentrouter.patch("/like/:commentId", likeComment);
 commentrouter.put("/:commentId", updateComment);
 commentrouter.delete("/:commentId", deleteComment);
+
+commentrouter.patch("/approve/:commentId", approveComment);
 
 export default commentrouter;

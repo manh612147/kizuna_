@@ -6,9 +6,7 @@ import productModel from "../models/productModel.js";
 // Thêm bình luận mới
 const addComment = async (req, res) => {
   try {
-
     const { productId } = req.params;
-
     let { userId, user, text, rating } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
@@ -26,105 +24,74 @@ const addComment = async (req, res) => {
     // ==========================
     // KIỂM TRA ĐÃ MUA HÀNG CHƯA
     // ==========================
-
     const deliveredOrder = await orderModel.findOne({
-    userId: userId.toString(),
-    status: "Delivered",
-    "items.productId": productId
-});
+      userId: userId.toString(),
+      status: "Delivered",
+      "items.productId": productId
+    });
 
     if (!deliveredOrder) {
-
       return res.status(403).json({
-
         success: false,
-
-        message:
-          "Bạn chỉ được đánh giá sau khi đơn hàng đã giao thành công."
-
+        message: "Bạn chỉ được đánh giá sau khi đơn hàng đã giao thành công."
       });
-
     }
 
     // ==========================
     // KHÔNG CHO ĐÁNH GIÁ 2 LẦN
     // ==========================
-
     const existed = await Comment.findOne({
-
       productId,
-
       userId
-
     });
 
     if (existed) {
-
       return res.status(400).json({
-
         success: false,
-
         message: "Bạn đã đánh giá sản phẩm này rồi."
-
       });
-
     }
 
     const newComment = new Comment({
-
       productId,
-
       userId,
-
       user,
-
       text,
-
       rating
-
     });
 
     await newComment.save();
 
     res.status(201).json({
-
       success: true,
-
+      message: "Gửi bình luận thành công! Đang chờ quản trị viên phê duyệt.",
       comment: newComment
-
     });
 
   } catch (error) {
-
     console.log(error);
-
     res.status(500).json({
-
       success: false,
-
       message: error.message
-
     });
-
   }
 };
   
-// Lấy danh sách bình luận của một sản phẩm
+// Lấy danh sách bình luận của một sản phẩm (CHỈ LẤY BÌNH LUẬN ĐÃ DUYỆT)
 const getComments = async (req, res) => {
   try {
-    const { productId } = req.params;  // Lấy productId từ URL
+    const { productId } = req.params;
     if (!productId) {
       return res.status(400).json({ message: "Thiếu productId!" });
     }
-    const comments = await Comment.find({ productId }).sort({ createdAt: -1 });
+    // Đã thêm điều kiện isApproved: true
+    const comments = await Comment.find({ productId, isApproved: true }).sort({ createdAt: -1 });
     res.status(200).json(comments);
   } catch (error) {
     console.error("Lỗi khi lấy danh sách bình luận:", error);
     res.status(500).json({ message: "Lỗi server", error });
   }
 };
-
-  
 
 // Like một bình luận
 const likeComment = async (req, res) => {
@@ -135,7 +102,7 @@ const likeComment = async (req, res) => {
           return res.status(404).json({ message: "Không tìm thấy bình luận" });
       }
 
-      comment.likes += 1; // Chỉ tăng số lượt like
+      comment.likes += 1;
       await comment.save();
 
       res.json({ success: true, likes: comment.likes });
@@ -173,26 +140,46 @@ const deleteComment = async (req, res) => {
     if (!deletedComment) {
       return res.status(404).json({ message: "Bình luận không tồn tại" });
     }
-    res.status(200).json({ message: "Xóa bình luận thành công" });
+    res.status(200).json({ success: true, message: "Xóa bình luận thành công" });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error });
   }
 };
 
-// Admin lấy toàn bộ dữ liệu
+// ADMIN: Lấy toàn bộ dữ liệu (CẢ DUYỆT VÀ CHƯA DUYỆT)
 const getAllComments = async (req, res) => {
   try {
-    const comments = await Comment.find().populate(
-    "productId",
-    "productCode name"
-); // Lấy tất cả bình luận
+    const comments = await Comment.find().sort({ createdAt: -1 }).populate(
+      "productId",
+      "productCode name"
+    ); 
     res.status(200).json(comments);
   } catch (error) {
     res.status(500).json({ error: "Lỗi khi lấy danh sách bình luận" });
   }
 };
 
+// ADMIN: Duyệt bình luận (HÀM MỚI THÊM)
+const approveComment = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const comment = await Comment.findByIdAndUpdate(
+      commentId,
+      { isApproved: true },
+      { new: true }
+    );
 
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bình luận" });
+    }
+    res.status(200).json({ success: true, message: "Đã duyệt bình luận thành công!" });
+  } catch (error) {
+    console.error("Lỗi khi duyệt bình luận:", error);
+    res.status(500).json({ success: false, message: "Lỗi server khi duyệt" });
+  }
+};
+
+// Lấy thống kê số sao (CHỈ TÍNH NHỮNG BÌNH LUẬN ĐÃ DUYỆT)
 const getRatingSummary = async (req, res) => {
   try {
     const { productId } = req.params;
@@ -200,7 +187,8 @@ const getRatingSummary = async (req, res) => {
     const result = await Comment.aggregate([
       {
         $match: {
-          productId: new mongoose.Types.ObjectId(productId)
+          productId: new mongoose.Types.ObjectId(productId),
+          isApproved: true // Đã thêm điều kiện chỉ tính bình luận đã duyệt
         }
       },
       {
@@ -238,5 +226,6 @@ export {
     deleteComment,
     updateComment,
     getAllComments,
+    approveComment, 
     getRatingSummary
 }

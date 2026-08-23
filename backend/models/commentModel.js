@@ -6,9 +6,12 @@ const commentSchema = new mongoose.Schema({
   user: { type: String, required: true },
   text: { type: String, required: true },
   rating: { type: Number, default: 5 },
-  likes: { type: Number, default: 0 }
+  likes: { type: Number, default: 0 },
+  
+  // Thêm trường trạng thái phê duyệt (Mặc định: false - Chưa duyệt)
+  isApproved: { type: Boolean, default: false }
+  
 }, { timestamps: true });
 
 const Comment = mongoose.model("Comment", commentSchema);
 export default Comment;
-

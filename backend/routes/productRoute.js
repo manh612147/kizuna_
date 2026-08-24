@@ -5,10 +5,13 @@ import adminAuth from "../middleware/adminAuth.js";
 
 const productRouter = express.Router();
 
-productRouter.post("/add",adminAuth, uplaod.fields([{name: 'image1', maxCount:1},{name: 'image2', maxCount:1},{name: 'image3', maxCount:1},{name: 'image4', maxCount:1}]), addProduct);
-productRouter.put("/update/:id", updateProduct);
+// NÂNG CẤP: Dùng upload.single("image") cho cả tính năng Thêm và Sửa
+productRouter.post("/add", adminAuth, uplaod.single("image"), addProduct);
+productRouter.put("/update/:id", adminAuth, uplaod.single("image"), updateProduct);
+
 productRouter.post("/remove",adminAuth, removeProduct);
 productRouter.post("/single", singleProduct);
 productRouter.get("/list", listProducts);
 productRouter.get("/count", countProducts);
+
 export default productRouter;

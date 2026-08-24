@@ -4,27 +4,17 @@ import productModel from "../models/productModel.js";
 // Hàm thêm sản phẩm
 const addProduct = async (req, res) => {
     try {
-        // Lấy dữ liệu từ request body
-        const { name,productCode, description, price, importPrice, category, bestseller, stock, discount, status } = req.body;
+        const { name, productCode, description, price, importPrice, category, bestseller, stock, discount, status } = req.body;
 
-        // Lấy các file ảnh từ request
-        const image1 = req.files.image1 && req.files.image1[0];
-        const image2 = req.files.image2 && req.files.image2[0];
-        const image3 = req.files.image3 && req.files.image3[0];
-        const image4 = req.files.image4 && req.files.image4[0];
+        // Chỉ lấy 1 file ảnh duy nhất từ request
+        const imageFile = req.file;
 
-        // Lọc ra các ảnh không bị undefined
-        const images = [image1, image2, image3, image4].filter((item) => item !== undefined);
+        let imagesUrl = [];
+        if (imageFile) {
+            let result = await cloudinary.uploader.upload(imageFile.path, { resource_type: "image" });
+            imagesUrl = [result.secure_url];
+        }
 
-        // Upload ảnh lên Cloudinary và lấy URL
-        let imagesUrl = await Promise.all(
-            images.map(async (item) => {
-                let result = await cloudinary.uploader.upload(item.path, { resource_type: "image" });
-                return result.secure_url;
-            })
-        );
-
-        // Tạo dữ liệu sản phẩm
         const productData = {
             name,
             productCode,
@@ -40,21 +30,15 @@ const addProduct = async (req, res) => {
             date: Date.now(), 
         };
 
-
-        console.log(productData);
-
-        // Tạo và lưu sản phẩm vào database
         const product = new productModel(productData);
         await product.save();
 
-        // Trả về phản hồi thành công
         res.json({ success: true, message: "Thêm sản phẩm thành công" });
     } catch (error) {
         console.log(error);
         res.json({ success: false, message: error.message });
     }
 };
-
 
 // Hàm lấy danh sách sản phẩm
 const listProducts = async (req, res) => {
@@ -96,7 +80,7 @@ const singleProduct = async (req, res) => {
 // Hàm đếm tổng số sản phẩm
 const countProducts = async (req, res) => {
     try {
-        const totalProducts = await productModel.countDocuments(); // Đếm số lượng sản phẩm
+        const totalProducts = await productModel.countDocuments(); 
         res.json({ success: true, total: totalProducts });
     } catch (error) {
         console.log(error);
@@ -104,36 +88,45 @@ const countProducts = async (req, res) => {
     }
 };
 
-// Hàm cập nhập thông tin sản phẩm
+// Hàm cập nhập thông tin sản phẩm 
 const updateProduct = async (req, res) => {
     try {
-        console.log("Received body:", req.body);
+        const { id } = req.params; 
+        // Bổ sung lấy thêm productCode từ req.body
+        const { name, productCode, description, price, importPrice, category, bestseller, stock, discount, status } = req.body;
 
-        const { id } = req.params; // Lấy ID từ URL params
-        const { name, description, price, importPrice, category, bestseller, stock, discount, status } = req.body;
-
-        console.log("Updating product with ID:", id);
-
-        // Kiểm tra sản phẩm có tồn tại không
         const product = await productModel.findById(id);
         if (!product) {
             return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại" });
         }
 
-        // Cập nhật sản phẩm (BỎ TRƯỜNG )
+        // Tạo cục dữ liệu chữ để cập nhật
+        const updateData = {
+            name,
+            productCode, 
+            description,
+            category,
+            price: Number(price),
+            importPrice: Number(importPrice),
+            bestseller: bestseller === "true",
+            stock: Number(stock),
+            discount: Number(discount),
+            status: status || "Còn hàng",
+        };
+
+        // KHI CÓ ẢNH MỚI: Xử lý upload lên Cloudinary
+        // Multer có thể trả file về req.file hoặc req.files tùy cách cấu hình ở Route
+        let imageFile = req.file || (req.files && req.files.image && req.files.image[0]);
+
+        if (imageFile) {
+            let result = await cloudinary.uploader.upload(imageFile.path, { resource_type: "image" });
+            updateData.image = [result.secure_url]; 
+        }
+
+        // Cập nhật vào Database
         const updatedProduct = await productModel.findByIdAndUpdate(
             id,
-            {
-                name,
-                description,
-                category,
-                price: Number(price),
-                importPrice: Number(importPrice),
-                bestseller: bestseller === "true",
-                stock: Number(stock),
-                discount: Number(discount),
-                status: status || "Còn hàng",
-            },
+            updateData,
             { new: true }
         );
 
@@ -143,6 +136,5 @@ const updateProduct = async (req, res) => {
         res.status(500).json({ success: false, message: "Lỗi server: " + error.message });
     }
 };
-
 
 export { listProducts, addProduct, removeProduct, singleProduct, countProducts, updateProduct };
